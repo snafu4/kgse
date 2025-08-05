@@ -1,5 +1,5 @@
-import json
 import zlib
+import json
 import base64
 
 class KGCompressor:

@@ -1,5 +1,5 @@
-import streamlit as st
 import json
+import streamlit as st
 import tempfile
 from pyvis.network import Network
 import networkx as nx
