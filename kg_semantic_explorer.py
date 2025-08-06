@@ -119,7 +119,7 @@ def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_o
     neighbors = set(n for node_id in result_node_ids if node_id in graph_obj for n in list(graph_obj.predecessors(node_id)) + list(graph_obj.successors(node_id)))
     subgraph_node_ids = set(result_node_ids) | neighbors
 
-    sub_net = Network(height="100vh", width="100%", notebook=False, directed=True)
+    sub_net = Network(height="650px", width="100%", notebook=False, directed=True)
     sub_net.set_options(json.dumps(vis_options))
 
     subgraph_nodes = []
@@ -293,7 +293,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Full Graph", "Find Similar Nodes", "Sem
 
 with tab1:
     st.header("Interactive Full Graph")
-    net = Network(height="100vh", width="100%", notebook=False, directed=True)
+    net = Network(height="800px", width="100%", notebook=False, directed=True)
     net.set_options(json.dumps(vis_options))
     for node in nodes:
         label = node["label"]
@@ -450,7 +450,7 @@ with tab5:
         hub_threshold = metrics_df["Degree"].quantile(0.9)
         bridge_threshold = metrics_df["Betweenness"].quantile(0.9)
 
-        net_anatomy = Network(height="100vh", width="100%", notebook=False, directed=True)
+        net_anatomy = Network(height="800px", width="100%", notebook=False, directed=True)
         net_anatomy.set_options(json.dumps(vis_options))
 
         # Use metrics_df as a lookup, but iterate over G.nodes() for consistency
