@@ -134,7 +134,7 @@ def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_o
                 color = "#97c2fc"
             sub_net.add_node(node_id, label=node_info["label"], title=clean_and_wrap(node_info.get("summary", "")), color=color)
             subgraph_nodes.append(node_info)
-
+ 
     subgraph_edges = []
     for edge in valid_edges:
         if edge["source"] in subgraph_node_ids and edge["target"] in subgraph_node_ids:
