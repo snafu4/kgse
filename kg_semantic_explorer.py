@@ -27,6 +27,20 @@ def clean_and_wrap(text, width=50):
 
 
 st.set_page_config(layout="wide")
+
+# ---- Custom CSS for Full-Width IFrame ----
+st.markdown(
+    """
+    <style>
+    iframe {
+        width: 100%;
+        min-height: 650px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 st.title("Knowledge Graph Semantic Explorer")
 
 # ---- Session State Management ----
