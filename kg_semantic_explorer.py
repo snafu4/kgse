@@ -28,6 +28,8 @@ def clean_and_wrap(text, width=50):
 
 st.set_page_config(layout="wide")
 st.title("Knowledge Graph Semantic Explorer")
+# Width (in pixels) for embedded graph iframes
+GRAPH_HTML_WIDTH = 1200
 
 # ---- Session State Management ----
 if st.session_state.get("_hard_reset_flag", False):
@@ -145,7 +147,7 @@ def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_o
     try:
         sub_net.write_html(html_file.name)
         with open(html_file.name, 'r', encoding='utf-8') as f:
-            st.components.v1.html(f.read(), height=650, width=None, scrolling=True)
+            st.components.v1.html(f.read(), height=650, width=GRAPH_HTML_WIDTH, scrolling=True)
     finally:
         html_file.close()
         os.remove(html_file.name)
@@ -306,7 +308,7 @@ with tab1:
     try:
         net.write_html(html_file.name)
         with open(html_file.name, 'r', encoding='utf-8') as f:
-            st.components.v1.html(f.read(), height=800, width=None, scrolling=True)
+            t.components.v1.html(f.read(), height=800, width=GRAPH_HTML_WIDTH, scrolling=True)
     finally:
         html_file.close()
         os.remove(html_file.name)
@@ -505,7 +507,7 @@ with tab5:
         try:
             net_anatomy.write_html(html_file_anatomy.name)
             with open(html_file_anatomy.name, 'r', encoding='utf-8') as f:
-                st.components.v1.html(f.read(), height=800, width=None, scrolling=True)
+                st.components.v1.html(f.read(), height=800, width=GRAPH_HTML_WIDTH, scrolling=True)
         finally:
             html_file_anatomy.close()
             os.remove(html_file_anatomy.name)
