@@ -308,7 +308,7 @@ with tab1:
     try:
         net.write_html(html_file.name)
         with open(html_file.name, 'r', encoding='utf-8') as f:
-            t.components.v1.html(f.read(), height=800, width=GRAPH_HTML_WIDTH, scrolling=True)
+            st.components.v1.html(f.read(), height=800, width=GRAPH_HTML_WIDTH, scrolling=True)
     finally:
         html_file.close()
         os.remove(html_file.name)
