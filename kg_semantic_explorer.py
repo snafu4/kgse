@@ -143,14 +143,8 @@ def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_o
             sub_net.add_edge(edge["source"], edge["target"], title=edge.get("label", ""), label=edge.get("label", ""))
             subgraph_edges.append(edge)
         
-    html_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-    try:
-        sub_net.write_html(html_file.name)
-        with open(html_file.name, 'r', encoding='utf-8') as f:
-            st.components.v1.html(f.read(), height=650, width=GRAPH_HTML_WIDTH, scrolling=True)
-    finally:
-        html_file.close()
-        os.remove(html_file.name)
+    sub_net.generate_html()
+    st.components.v1.html(sub_net.html, height=650, width=GRAPH_HTML_WIDTH, scrolling=True)
     
     return subgraph_nodes, subgraph_edges
 
@@ -304,14 +298,8 @@ with tab1:
     for edge in valid_edges:
         net.add_edge(edge["source"], edge["target"], title=edge.get("label", ""), label=edge.get("label", ""))
 
-    html_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-    try:
-        net.write_html(html_file.name)
-        with open(html_file.name, 'r', encoding='utf-8') as f:
-            st.components.v1.html(f.read(), height=800, width=GRAPH_HTML_WIDTH, scrolling=True)
-    finally:
-        html_file.close()
-        os.remove(html_file.name)
+    net.generate_html()
+    st.components.v1.html(net.html, height=800, width=GRAPH_HTML_WIDTH, scrolling=True)
 
 with tab2:
     st.header("Find Similar Nodes")
@@ -503,13 +491,7 @@ with tab5:
                 net_anatomy.add_edge(edge["source"], edge["target"], title=edge.get("label", ""), label=edge.get("label", ""))    
 
         # Save and display the graph
-        html_file_anatomy = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-        try:
-            net_anatomy.write_html(html_file_anatomy.name)
-            with open(html_file_anatomy.name, 'r', encoding='utf-8') as f:
-                st.components.v1.html(f.read(), height=800, width=GRAPH_HTML_WIDTH, scrolling=True)
-        finally:
-            html_file_anatomy.close()
-            os.remove(html_file_anatomy.name)
+        net_anatomy.generate_html()
+        st.components.v1.html(net_anatomy.html, height=800, width=GRAPH_HTML_WIDTH, scrolling=True)
     else:
         st.info("Graph is empty. No metrics to display.")
