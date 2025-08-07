@@ -27,20 +27,6 @@ def clean_and_wrap(text, width=50):
 
 
 st.set_page_config(layout="wide")
-
-# ---- Custom CSS for Full-Width IFrame ----
-st.markdown(
-    """
-    <style>
-    iframe {
-        width: 100%;
-        min-height: 650px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 st.title("Knowledge Graph Semantic Explorer")
 
 # ---- Session State Management ----
@@ -133,7 +119,7 @@ def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_o
     neighbors = set(n for node_id in result_node_ids if node_id in graph_obj for n in list(graph_obj.predecessors(node_id)) + list(graph_obj.successors(node_id)))
     subgraph_node_ids = set(result_node_ids) | neighbors
 
-    sub_net = Network(height="100vh", width="100%", notebook=False, directed=True, cdn_resources="local")
+    sub_net = Network(height="100vh", width="100%", notebook=False, directed=True, cdn_resources="in_line")
     sub_net.set_options(json.dumps(vis_options))
 
     subgraph_nodes = []
@@ -148,7 +134,7 @@ def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_o
                 color = "#97c2fc"
             sub_net.add_node(node_id, label=node_info["label"], title=clean_and_wrap(node_info.get("summary", "")), color=color)
             subgraph_nodes.append(node_info)
- 
+
     subgraph_edges = []
     for edge in valid_edges:
         if edge["source"] in subgraph_node_ids and edge["target"] in subgraph_node_ids:
@@ -307,7 +293,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Full Graph", "Find Similar Nodes", "Sem
 
 with tab1:
     st.header("Interactive Full Graph")
-    net = Network(height="100vh", width="100%", notebook=False, directed=True, cdn_resources="local")
+    net = Network(height="100vh", width="100%", notebook=False, directed=True, cdn_resources="in_line")
     net.set_options(json.dumps(vis_options))
     for node in nodes:
         label = node["label"]
@@ -464,7 +450,7 @@ with tab5:
         hub_threshold = metrics_df["Degree"].quantile(0.9)
         bridge_threshold = metrics_df["Betweenness"].quantile(0.9)
 
-        net_anatomy = Network(height="100vh", width="100%", notebook=False, directed=True, cdn_resources="local")
+        net_anatomy = Network(height="100vh", width="100%", notebook=False, directed=True, cdn_resources="in_line")
         net_anatomy.set_options(json.dumps(vis_options))
 
         # Use metrics_df as a lookup, but iterate over G.nodes() for consistency
