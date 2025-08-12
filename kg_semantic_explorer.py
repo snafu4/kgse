@@ -14,6 +14,8 @@ import pandas as pd
 from networkx.algorithms import community
 import zlib
 import uuid
+import colorsys
+from collections import defaultdict
 
 def clean_and_wrap(text, width=50):
     # Remove all HTML tags (anything between < and >)
@@ -28,8 +30,6 @@ def clean_and_wrap(text, width=50):
 
 st.set_page_config(layout="wide")
 st.title("Knowledge Graph Semantic Explorer")
-# Width (in pixels) for embedded graph iframes
-GRAPH_HTML_WIDTH = 1200
 
 # ---- Session State Management ----
 if st.session_state.get("_hard_reset_flag", False):
@@ -76,77 +76,165 @@ def compress_kge_data(nodes, edges, embeddings, model_name):
 
 def prepare_kgs_data(subgraph_nodes, subgraph_edges):
     """
-    Prepares data in the .kgs format (zlib compressed JSON), ensuring edges
-    have the correct 'from', 'to', and 'id' keys.
+    Prepares data in the .kgs format to be compatible with 02-trim_nodes.py.
+    This format is a zlib-compressed JSON object representing an "IsolationState".
+    It now aims to preserve all original node/edge properties from the subgraph,
+    while adding/overwriting only necessary vis.js-specific fields.
     """
-    # Ensure all nodes have a unique ID, default to label if not present
-    for node in subgraph_nodes:
-        if 'id' not in node:
-            node['id'] = node.get('label', str(uuid.uuid4()))
-
-    # Correctly format edges
-    formatted_edges = []
+    
+    # Calculate node degrees for the 'value' property.
+    node_degrees = defaultdict(int)
     for edge in subgraph_edges:
-        formatted_edge = {
-            "from": edge.get("source"),
-            "to": edge.get("target"),
-            "id": str(uuid.uuid4()),  # Add a unique ID
-            "label": edge.get("label", ""),
-            "arrows": edge.get("arrows", "to")
-        }
-        # Carry over font styling if it exists
-        if "font" in edge:
-            formatted_edge["font"] = edge["font"]
-        formatted_edges.append(formatted_edge)
+        node_degrees[edge.get("source")] += 1
+        node_degrees[edge.get("target")] += 1
 
+    # Process Nodes: Preserve all original properties, then add/override vis.js specific ones.
+    processed_nodes = []
+    for node in subgraph_nodes:
+        new_node = dict(node) # Start with a shallow copy of the original node
+
+        # Add 'value' property for sizing (always calculated)
+        new_node['value'] = node_degrees[new_node.get("id")]
+
+        # Explicitly set shape to 'dot' as requested
+        new_node['shape'] = 'dot'
+
+        # Ensure 'summary' and 'type' are present (add defaults only if truly missing)
+        if 'summary' not in new_node:
+            new_node['summary'] = ''
+        if 'type' not in new_node:
+            new_node['type'] = 'default'
+
+        # Set the 'title' property for popover text
+        new_node['title'] = clean_and_wrap(new_node.get("summary", ""))
+
+        # Assign distinct colors based on group/type, but only if 'color' is not already defined
+        if 'color' not in new_node:
+            group = new_node.get("group") or new_node.get("type") or "default"
+            # Temporarily store nodes by group to assign colors
+            # This part needs to be done after all nodes are processed to ensure consistent color assignment
+            # So, we'll collect nodes and then assign colors in a separate loop or function.
+            # For now, let's just mark them for color assignment.
+            new_node['_group_for_color'] = group # Use a temporary key
+
+        # Apply default font styling, but only if 'font' is not already defined
+        if 'font' not in new_node:
+            new_node['font'] = {"color": "white", "strokeWidth": 2, "strokeColor": "black"}
+        
+        processed_nodes.append(new_node)
+
+    # Second pass for color assignment (after all nodes are in processed_nodes)
+    # This ensures consistent color mapping across all nodes based on their groups.
+    groups_for_coloring = defaultdict(list)
+    for node in processed_nodes:
+        if '_group_for_color' in node:
+            groups_for_coloring[node['_group_for_color']].append(node)
+            del node['_group_for_color'] # Clean up temporary key
+
+    group_names = sorted(groups_for_coloring)
+    total_groups = len(group_names)
+
+    for idx, group in enumerate(group_names):
+        h = idx / max(1, total_groups)
+        s, v = 0.6, 0.85
+        r, g, b = colorsys.hsv_to_rgb(h, s, v)
+        color_hex = f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+        for node in groups_for_coloring[group]:
+            node['color'] = {"background": color_hex}
+
+
+    # Process Edges: Preserve all original properties, then add/override vis.js specific ones.
+    processed_edges = []
+    for edge in subgraph_edges:
+        new_edge = dict(edge) # Start with a shallow copy of the original edge
+
+        # Transform 'source'/'target' to 'from'/'to' (vis.js format)
+        new_edge['from'] = new_edge.pop('source')
+        new_edge['to'] = new_edge.pop('target')
+
+        # Ensure 'id' is present
+        if 'id' not in new_edge:
+            new_edge['id'] = str(uuid.uuid4())
+
+        # Ensure 'label' is present (use 'type' if 'label' is missing)
+        if 'label' not in new_edge:
+            new_edge['label'] = new_edge.get('type', '')
+
+        # Ensure 'arrows' is present
+        if 'arrows' not in new_edge:
+            new_edge['arrows'] = 'to' # Default direction
+
+        # Apply default font styling, but only if 'font' is not already defined
+        if 'font' not in new_edge:
+            new_edge['font'] = {"color": "white", "strokeWidth": 2, "strokeColor": "black"}
+        
+        # Ensure 'color' is present (if not, vis.js will use default)
+        # No explicit default color assignment here, vis.js handles it.
+
+        processed_edges.append(new_edge)
+
+    # Build the final state object matching the structure from 02-trim_nodes.py.
     state = {
         "type": "IsolationState",
         "version": 1,
         "timestamp": pd.Timestamp.now().isoformat(),
         "isolateStack": [{
-            "nodes": subgraph_nodes,
-            "edges": formatted_edges,
+            "nodes": processed_nodes,
+            "edges": processed_edges,
             "deleted": []
         }]
     }
+
     json_string = json.dumps(state, indent=2)
     compressed_data = zlib.compress(json_string.encode('utf-8'))
     return compressed_data
 
-def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_options, source_node_id=None):
+def get_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges):
     """
-    Refactored function to generate and display a subgraph visualization.
-    Returns the nodes and edges of the displayed subgraph.
+    Calculates the subgraph containing the result nodes and their immediate neighbors.
     """
     neighbors = set(n for node_id in result_node_ids if node_id in graph_obj for n in list(graph_obj.predecessors(node_id)) + list(graph_obj.successors(node_id)))
     subgraph_node_ids = set(result_node_ids) | neighbors
 
-    sub_net = Network(height="100vh", width="100%", notebook=False, directed=True, cdn_resources="in_line")
-    sub_net.set_options(json.dumps(vis_options))
-
-    subgraph_nodes = []
-    for node_id in subgraph_node_ids:
-        if node_id in node_lookup:
-            node_info = node_lookup[node_id]
-            if node_id == source_node_id:
-                color = "red"
-            elif node_id in result_node_ids:
-                color = "#00ff00"
-            else:
-                color = "#97c2fc"
-            sub_net.add_node(node_id, label=node_info["label"], title=clean_and_wrap(node_info.get("summary", "")), color=color)
-            subgraph_nodes.append(node_info)
-
-    subgraph_edges = []
-    for edge in valid_edges:
-        if edge["source"] in subgraph_node_ids and edge["target"] in subgraph_node_ids:
-            sub_net.add_edge(edge["source"], edge["target"], title=edge.get("label", ""), label=edge.get("label", ""))
-            subgraph_edges.append(edge)
-        
-    sub_net.generate_html()
-    st.components.v1.html(sub_net.html, height=650, width=GRAPH_HTML_WIDTH, scrolling=True)
+    # Return the full node object from the lookup
+    subgraph_nodes = [node_lookup[nid] for nid in subgraph_node_ids if nid in node_lookup]
+    
+    # Return the full edge object
+    subgraph_edges = [edge for edge in valid_edges if edge.get('source') in subgraph_node_ids and edge.get('target') in subgraph_node_ids]
     
     return subgraph_nodes, subgraph_edges
+
+def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_options, source_node_id=None):
+    """
+    Generates and displays a subgraph visualization without returning data.
+    """
+    subgraph_nodes, subgraph_edges = get_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges)
+    
+    sub_net = Network(height="600px", width="100%", notebook=False, directed=True)
+    sub_net.set_options(json.dumps(vis_options))
+
+    for node_info in subgraph_nodes:
+        node_id = node_info['id']
+        if node_id == source_node_id:
+            color = "red"
+        elif node_id in result_node_ids:
+            color = "#00ff00"
+        else:
+            color = "#97c2fc"
+        sub_net.add_node(node_id, label=node_info["label"], title=clean_and_wrap(node_info.get("summary", "")), color=color)
+
+    for edge in subgraph_edges:
+        edge_label = edge.get("label") or edge.get("type", "")
+        sub_net.add_edge(edge["source"], edge["target"], title=edge_label, label=edge_label)
+        
+    html_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+    try:
+        sub_net.write_html(html_file.name)
+        with open(html_file.name, 'r', encoding='utf-8') as f:
+            st.components.v1.html(f.read(), height=650, scrolling=True)
+    finally:
+        html_file.close()
+        os.remove(html_file.name)
 
 
 # ---- Sidebar Setup & File Upload ----
@@ -289,17 +377,24 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Full Graph", "Find Similar Nodes", "Sem
 
 with tab1:
     st.header("Interactive Full Graph")
-    net = Network(height="100vh", width="100%", notebook=False, directed=True, cdn_resources="in_line")
+    net = Network(height="750px", width="100%", notebook=False, directed=True)
     net.set_options(json.dumps(vis_options))
     for node in nodes:
         label = node["label"]
         tooltip = clean_and_wrap(node.get("summary", ""))
         net.add_node(node["id"], label=label, title=tooltip)
     for edge in valid_edges:
-        net.add_edge(edge["source"], edge["target"], title=edge.get("label", ""), label=edge.get("label", ""))
+        edge_label = edge.get("label") or edge.get("type", "")
+        net.add_edge(edge["source"], edge["target"], title=edge_label, label=edge_label)
 
-    net.generate_html()
-    st.components.v1.html(net.html, height=800, width=GRAPH_HTML_WIDTH, scrolling=True)
+    html_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+    try:
+        net.write_html(html_file.name)
+        with open(html_file.name, 'r', encoding='utf-8') as f:
+            st.components.v1.html(f.read(), height=800, scrolling=True)
+    finally:
+        html_file.close()
+        os.remove(html_file.name)
 
 with tab2:
     st.header("Find Similar Nodes")
@@ -317,7 +412,15 @@ with tab2:
             st.write(f"- {node_ids[i]} (Similarity: {sims[i]:.2f})")
             result_node_ids.append(node_ids[i])
 
-        subgraph_nodes, subgraph_edges = display_subgraph(G, result_node_ids, node_lookup, valid_edges, vis_options, source_node_id=selected_sim_node)
+        # Display the subgraph
+        display_subgraph(G, result_node_ids, node_lookup, valid_edges, vis_options, source_node_id=selected_sim_node)
+
+        # Get the same subgraph data for exporting
+        subgraph_nodes, subgraph_edges = get_subgraph(G, result_node_ids, node_lookup, valid_edges)
+
+        with st.expander("DEBUG: Data prepared for export (Find Similar Nodes)"):
+            st.write("Node IDs:", sorted([n['id'] for n in subgraph_nodes]))
+            st.write(f"Edge Count: {len(subgraph_edges)}")
 
         if subgraph_nodes:
             kgs_data = prepare_kgs_data(subgraph_nodes, subgraph_edges)
@@ -345,7 +448,15 @@ with tab3:
         for i in top_indices:
             st.write(f"- {node_ids[i]} (Similarity: {sims[i]:.2f})")
 
-        subgraph_nodes, subgraph_edges = display_subgraph(G, result_node_ids, node_lookup, valid_edges, vis_options)
+        # Display the subgraph
+        display_subgraph(G, result_node_ids, node_lookup, valid_edges, vis_options)
+
+        # Get the same subgraph data for exporting
+        subgraph_nodes, subgraph_edges = get_subgraph(G, result_node_ids, node_lookup, valid_edges)
+
+        with st.expander("DEBUG: Data prepared for export (Semantic Search)"):
+            st.write("Node IDs:", sorted([n['id'] for n in subgraph_nodes]))
+            st.write(f"Edge Count: {len(subgraph_edges)}")
 
         if subgraph_nodes:
             kgs_data = prepare_kgs_data(subgraph_nodes, subgraph_edges)
@@ -440,7 +551,7 @@ with tab5:
         hub_threshold = metrics_df["Degree"].quantile(0.9)
         bridge_threshold = metrics_df["Betweenness"].quantile(0.9)
 
-        net_anatomy = Network(height="100vh", width="100%", notebook=False, directed=True, cdn_resources="in_line")
+        net_anatomy = Network(height="750px", width="100%", notebook=False, directed=True)
         net_anatomy.set_options(json.dumps(vis_options))
 
         # Use metrics_df as a lookup, but iterate over G.nodes() for consistency
@@ -488,10 +599,17 @@ with tab5:
         for edge in valid_edges:
             # Ensure both source and target nodes exist before adding an edge
             if edge["source"] in G.nodes() and edge["target"] in G.nodes():
-                net_anatomy.add_edge(edge["source"], edge["target"], title=edge.get("label", ""), label=edge.get("label", ""))    
+                edge_label = edge.get("label") or edge.get("type", "")
+                net_anatomy.add_edge(edge["source"], edge["target"], title=edge_label, label=edge_label)    
 
         # Save and display the graph
-        net_anatomy.generate_html()
-        st.components.v1.html(net_anatomy.html, height=800, width=GRAPH_HTML_WIDTH, scrolling=True)
+        html_file_anatomy = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+        try:
+            net_anatomy.write_html(html_file_anatomy.name)
+            with open(html_file_anatomy.name, 'r', encoding='utf-8') as f:
+                st.components.v1.html(f.read(), height=800, scrolling=True)
+        finally:
+            html_file_anatomy.close()
+            os.remove(html_file_anatomy.name)
     else:
         st.info("Graph is empty. No metrics to display.")
