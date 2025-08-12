@@ -1,5 +1,9 @@
 import streamlit as st
 st.set_page_config(layout="wide")
+st.markdown(
+    "<style>iframe[title='st.components.v1.html']{max-width:100% !important;width:100% !important;}</style>",
+    unsafe_allow_html=True
+)
 
 import json
 import tempfile
@@ -243,7 +247,7 @@ def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_o
     try:
         sub_net.write_html(html_file.name)
         with open(html_file.name, 'r', encoding='utf-8') as f:
-            st.components.v1.html(f.read(), height=650, scrolling=True)
+            st.components.v1.html(f.read(), height=800, width=1600, scrolling=True)
     finally:
         html_file.close()
         os.remove(html_file.name)
@@ -403,7 +407,7 @@ with tab1:
     try:
         net.write_html(html_file.name)
         with open(html_file.name, 'r', encoding='utf-8') as f:
-            st.components.v1.html(f.read(), height=800, scrolling=True)
+            st.components.v1.html(f.read(), height=800, width=1600, scrolling=True)
     finally:
         html_file.close()
         os.remove(html_file.name)
@@ -619,7 +623,7 @@ with tab5:
         try:
             net_anatomy.write_html(html_file_anatomy.name)
             with open(html_file_anatomy.name, 'r', encoding='utf-8') as f:
-                st.components.v1.html(f.read(), height=800, scrolling=True)
+                st.components.v1.html(f.read(), height=800, width=1600, scrolling=True)
         finally:
             html_file_anatomy.close()
             os.remove(html_file_anatomy.name)
