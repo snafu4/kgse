@@ -4,7 +4,6 @@ st.markdown(
     "<style>iframe[title='st.components.v1.html']{max-width:100% !important;width:100% !important;}</style>",
     unsafe_allow_html=True
 )
-
 import json
 import tempfile
 from pyvis.network import Network
@@ -441,7 +440,7 @@ with tab2:
         if subgraph_nodes:
             kgs_data = prepare_kgs_data(subgraph_nodes, subgraph_edges)
             st.download_button(
-                label="Export Subgraph (.kgs)",
+                label="Export State (.kgs)",
                 data=kgs_data,
                 file_name=f"subgraph_{selected_sim_node}.kgs",
                 mime="application/octet-stream",
@@ -477,7 +476,7 @@ with tab3:
         if subgraph_nodes:
             kgs_data = prepare_kgs_data(subgraph_nodes, subgraph_edges)
             st.download_button(
-                label="Export Subgraph (.kgs)",
+                label="Export State (.kgs)",
                 data=kgs_data,
                 file_name=f"subgraph_search.kgs",
                 mime="application/octet-stream",
