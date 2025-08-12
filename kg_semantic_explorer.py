@@ -1,4 +1,6 @@
 import streamlit as st
+st.set_page_config(layout="wide")
+
 import json
 import tempfile
 from pyvis.network import Network
@@ -28,17 +30,16 @@ def clean_and_wrap(text, width=50):
     return wrapped
 
 
-st.set_page_config(layout="wide")
-st.markdown("""
-    <style>
-    /* Use full-width content area */
-    .block-container {max-width: 100% !important; padding-left: 1rem; padding-right: 1rem;}
-    /* Make the components iframe stretch */
-    iframe[title="st.components.v1.html"] {width: 100% !important;}
-    /* Ensure tab panels take full width */
-    [data-testid="stTabs"] div[role="tabpanel"] {width: 100%;}
-    </style>
-    """, unsafe_allow_html=True)
+# st.markdown("""
+    # <style>
+    # /* Use full-width content area */
+    # .block-container {max-width: 100% !important; padding-left: 1rem; padding-right: 1rem;}
+    # /* Make the components iframe stretch */
+    # iframe[title="st.components.v1.html"] {width: 100% !important;}
+    # /* Ensure tab panels take full width */
+    # [data-testid="stTabs"] div[role="tabpanel"] {width: 100%;}
+    # </style>
+    # """, unsafe_allow_html=True)
 
 st.title("Knowledge Graph Semantic Explorer")
 
