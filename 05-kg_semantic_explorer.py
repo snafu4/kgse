@@ -11,6 +11,7 @@ import networkx as nx
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.decomposition import PCA
 import os
 from kg_compressor import KGCompressor
 import re
@@ -21,6 +22,9 @@ import zlib
 import uuid
 import colorsys
 from collections import defaultdict
+import plotly.express as px
+import plotly.graph_objects as go
+from streamlit_plotly_events import plotly_events
 
 def clean_and_wrap(text, width=50):
     # Remove all HTML tags (anything between < and >)
@@ -360,6 +364,12 @@ nodes = st.session_state.graph_data["nodes"]
 edges = st.session_state.graph_data["edges"]
 embeddings = st.session_state.embeddings
 
+# Precompute 2D projection of embeddings
+if "embeddings_2d" not in st.session_state or st.session_state.embeddings_2d.shape[0] != len(embeddings):
+    pca = PCA(n_components=2)
+    st.session_state.embeddings_2d = pca.fit_transform(embeddings)
+projection_2d = st.session_state.embeddings_2d
+
 node_ids = [n["id"] for n in nodes]
 node_lookup = {node["id"]: node for node in nodes}
 node_id_to_index = {node_id: i for i, node_id in enumerate(node_ids)}
@@ -382,7 +392,11 @@ G.add_nodes_from((node["id"], node) for node in nodes)
 G.add_edges_from([(e["source"], e["target"], e) for e in valid_edges])
 
 # Compute community assignments once for optional coloring
-communities = community.greedy_modularity_communities(G.to_undirected())
+try:
+    communities = list(community.greedy_modularity_communities(G.to_undirected()))
+except Exception as e:
+    communities = []
+    st.warning(f"Community detection failed: {e}")
 community_map = {n: idx for idx, comm in enumerate(communities) for n in comm}
 community_colors = {}
 total_comms = len(communities)
@@ -406,11 +420,11 @@ vis_options = {
     }
 }
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Full Graph", "Find Similar Nodes", "Semantic Search", "Diagnostics", "Graph Anatomy"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Full Graph", "Find Similar Nodes", "Semantic Search", "Diagnostics", "Graph Anatomy", "Embedding Map"])
 
 with tab1:
     st.header("Interactive Full Graph")
-    color_by_community = st.checkbox("Color nodes by community")
+    color_by_community = st.checkbox("Color nodes by community", key="color_by_community")
     node_types = sorted({node_kind(node) for node in nodes})
     selected_types = st.multiselect("Node types to display", node_types, default=node_types)
     filtered_nodes = [node for node in nodes if node_kind(node) in selected_types]
@@ -658,3 +672,41 @@ with tab5:
             os.remove(html_file_anatomy.name)
     else:
         st.info("Graph is empty. No metrics to display.")
+
+with tab6:
+    st.header("Embedding Map")
+    if embeddings is not None and len(embeddings):
+        coords = projection_2d
+        labels = [node["label"] for node in nodes]
+        df_map = pd.DataFrame({
+            "x": coords[:, 0],
+            "y": coords[:, 1],
+            "label": labels,
+            "id": node_ids,
+        })
+
+        fig = px.scatter(df_map, x="x", y="y", text="label", hover_name="label")
+        fig.update_traces(textposition="top center")
+
+        selected_idx = st.session_state.get("selected_map_idx")
+        if selected_idx is not None:
+            fig.update_traces(marker=dict(color="LightGray", size=8))
+            fig.add_trace(go.Scatter(
+                x=[df_map.iloc[selected_idx]["x"]],
+                y=[df_map.iloc[selected_idx]["y"]],
+                text=[df_map.iloc[selected_idx]["label"]],
+                mode="markers+text",
+                marker=dict(color="red", size=12),
+            ))
+
+        selected_points = plotly_events(fig, click_event=True, hover_event=False, key="embedding_map")
+        if selected_points:
+            st.session_state.selected_map_idx = selected_points[0]["pointIndex"]
+            st.rerun()
+
+        if selected_idx is not None:
+            node = nodes[selected_idx]
+            st.subheader(node.get("label", node.get("id")))
+            st.json(node)
+    else:
+        st.info("No embeddings available to visualize.")
