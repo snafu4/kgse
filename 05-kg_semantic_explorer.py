@@ -89,6 +89,13 @@ def compress_kge_data(nodes, edges, embeddings, model_name):
         st.error(f"Failed to compress data for saving: {e}")
         return None
 
+
+def node_kind(n: dict):
+    """Unified accessor for a node's category.
+    Prefer explicit 'type', then fall back to 'group', else 'default'.
+    """
+    return n.get('type') or n.get('group') or 'default'
+
 def prepare_kgs_data(subgraph_nodes, subgraph_edges):
     """
     Prepares data in the .kgs format to be compatible with 02-trim_nodes.py.
@@ -118,7 +125,7 @@ def prepare_kgs_data(subgraph_nodes, subgraph_edges):
         if 'summary' not in new_node:
             new_node['summary'] = ''
         if 'type' not in new_node:
-            new_node['type'] = 'default'
+            new_node['type'] = new_node.get('group', 'default')
 
         # Set the 'title' property for popover text
         new_node['title'] = clean_and_wrap(new_node.get("summary", ""))
@@ -404,9 +411,9 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Full Graph", "Find Similar Nodes", "Sem
 with tab1:
     st.header("Interactive Full Graph")
     color_by_community = st.checkbox("Color nodes by community")
-    node_types = sorted({node.get("type") or "default" for node in nodes})
+    node_types = sorted({node_kind(node) for node in nodes})
     selected_types = st.multiselect("Node types to display", node_types, default=node_types)
-    filtered_nodes = [node for node in nodes if (node.get("type") or "default") in selected_types]
+    filtered_nodes = [node for node in nodes if node_kind(node) in selected_types]
     filtered_node_ids = {n["id"] for n in filtered_nodes}
     filtered_edges = [edge for edge in valid_edges if edge["source"] in filtered_node_ids and edge["target"] in filtered_node_ids]
 
