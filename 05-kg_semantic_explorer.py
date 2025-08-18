@@ -12,7 +12,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import os
-from kg_compressor import KGCompressor
+from UTL_kg_compressor import KGCompressor
 import re
 import textwrap
 import pandas as pd
