@@ -392,13 +392,40 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Full Graph", "Find Similar Nodes", "Sem
 
 with tab1:
     st.header("Interactive Full Graph")
+
+    # Compute available node and edge types
+    node_types = sorted({node.get("type", "Unknown") for node in nodes})
+    edge_types = sorted({edge.get("type", "Unknown") for edge in valid_edges})
+
+    # Selection widgets for filtering
+    selected_node_types = st.multiselect(
+        "Node types to display", node_types, default=node_types
+    )
+    selected_edge_types = st.multiselect(
+        "Edge types to display", edge_types, default=edge_types
+    )
+
+    # Filter nodes and edges based on selections
+    filtered_nodes = [
+        node for node in nodes if node.get("type", "Unknown") in selected_node_types
+    ]
+    filtered_node_ids = {n["id"] for n in filtered_nodes}
+    filtered_edges = [
+        edge
+        for edge in valid_edges
+        if edge.get("type", "Unknown") in selected_edge_types
+        and edge["source"] in filtered_node_ids
+        and edge["target"] in filtered_node_ids
+    ]
+
+    # Build network with filtered data
     net = Network(height="750px", width="100%", notebook=False, directed=True)
     net.set_options(json.dumps(vis_options))
-    for node in nodes:
+    for node in filtered_nodes:
         label = node["label"]
         tooltip = clean_and_wrap(node.get("summary", ""))
         net.add_node(node["id"], label=label, title=tooltip)
-    for edge in valid_edges:
+    for edge in filtered_edges:
         edge_label = edge.get("label") or edge.get("type", "")
         net.add_edge(edge["source"], edge["target"], title=edge_label, label=edge_label)
 
