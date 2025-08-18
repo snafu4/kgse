@@ -392,7 +392,11 @@ G.add_nodes_from((node["id"], node) for node in nodes)
 G.add_edges_from([(e["source"], e["target"], e) for e in valid_edges])
 
 # Compute community assignments once for optional coloring
-communities = community.greedy_modularity_communities(G.to_undirected())
+try:
+    communities = list(community.greedy_modularity_communities(G.to_undirected()))
+except Exception as e:
+    communities = []
+    st.warning(f"Community detection failed: {e}")
 community_map = {n: idx for idx, comm in enumerate(communities) for n in comm}
 community_colors = {}
 total_comms = len(communities)
@@ -420,7 +424,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Full Graph", "Find Similar Nodes"
 
 with tab1:
     st.header("Interactive Full Graph")
-    color_by_community = st.checkbox("Color nodes by community")
+    color_by_community = st.checkbox("Color nodes by community", key="color_by_community")
     node_types = sorted({node_kind(node) for node in nodes})
     selected_types = st.multiselect("Node types to display", node_types, default=node_types)
     filtered_nodes = [node for node in nodes if node_kind(node) in selected_types]
