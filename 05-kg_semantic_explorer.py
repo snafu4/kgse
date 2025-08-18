@@ -374,6 +374,17 @@ G = nx.DiGraph()
 G.add_nodes_from((node["id"], node) for node in nodes)
 G.add_edges_from([(e["source"], e["target"], e) for e in valid_edges])
 
+# Compute community assignments once for optional coloring
+communities = community.greedy_modularity_communities(G.to_undirected())
+community_map = {n: idx for idx, comm in enumerate(communities) for n in comm}
+community_colors = {}
+total_comms = len(communities)
+for idx in range(total_comms):
+    h = idx / max(1, total_comms)
+    s, v = 0.6, 0.85
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+    community_colors[idx] = f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+
 vis_options = {
     "interaction": { "zoomSpeed": 0.2 },
     "physics": {
@@ -392,12 +403,18 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Full Graph", "Find Similar Nodes", "Sem
 
 with tab1:
     st.header("Interactive Full Graph")
+    color_by_community = st.checkbox("Color nodes by community")
     net = Network(height="750px", width="100%", notebook=False, directed=True)
     net.set_options(json.dumps(vis_options))
     for node in nodes:
         label = node["label"]
         tooltip = clean_and_wrap(node.get("summary", ""))
-        net.add_node(node["id"], label=label, title=tooltip)
+        if color_by_community:
+            comm_idx = community_map.get(node["id"])
+            color = community_colors.get(comm_idx, "#97c2fc")
+            net.add_node(node["id"], label=label, title=tooltip, color=color)
+        else:
+            net.add_node(node["id"], label=label, title=tooltip)
     for edge in valid_edges:
         edge_label = edge.get("label") or edge.get("type", "")
         net.add_edge(edge["source"], edge["target"], title=edge_label, label=edge_label)
