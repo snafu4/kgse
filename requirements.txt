@@ -3,3 +3,5 @@ network
 numpy
 sentence-transformers
 scikit-learn
+plotly
+streamlit-plotly-events
