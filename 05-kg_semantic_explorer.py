@@ -404,9 +404,15 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Full Graph", "Find Similar Nodes", "Sem
 with tab1:
     st.header("Interactive Full Graph")
     color_by_community = st.checkbox("Color nodes by community")
+    node_types = sorted({node.get("type") or "default" for node in nodes})
+    selected_types = st.multiselect("Node types to display", node_types, default=node_types)
+    filtered_nodes = [node for node in nodes if (node.get("type") or "default") in selected_types]
+    filtered_node_ids = {n["id"] for n in filtered_nodes}
+    filtered_edges = [edge for edge in valid_edges if edge["source"] in filtered_node_ids and edge["target"] in filtered_node_ids]
+
     net = Network(height="750px", width="100%", notebook=False, directed=True)
     net.set_options(json.dumps(vis_options))
-    for node in nodes:
+    for node in filtered_nodes:
         label = node["label"]
         tooltip = clean_and_wrap(node.get("summary", ""))
         if color_by_community:
@@ -415,7 +421,7 @@ with tab1:
             net.add_node(node["id"], label=label, title=tooltip, color=color)
         else:
             net.add_node(node["id"], label=label, title=tooltip)
-    for edge in valid_edges:
+    for edge in filtered_edges:
         edge_label = edge.get("label") or edge.get("type", "")
         net.add_edge(edge["source"], edge["target"], title=edge_label, label=edge_label)
 
