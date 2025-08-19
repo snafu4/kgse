@@ -96,6 +96,28 @@ def node_kind(n: dict):
     """
     return n.get('type') or n.get('group') or 'default'
 
+def color_from_index(idx: int, total: int, s: float = 0.6, v: float = 0.85) -> str:
+    """Return a distinct hex color for a given index within a range."""
+    h = idx / max(1, total)
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+    return f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+
+def assign_group_colors(nodes: list) -> None:
+    """Assign consistent colors to nodes grouped by type or group."""
+    groups = defaultdict(list)
+    for node in nodes:
+        if 'color' in node:
+            continue
+        group = node.get("group") or node.get("type") or "default"
+        groups[group].append(node)
+
+    group_names = sorted(groups)
+    total_groups = len(group_names)
+    for idx, group in enumerate(group_names):
+        color_hex = color_from_index(idx, total_groups)
+        for node in groups[group]:
+            node['color'] = {"background": color_hex}
+
 def prepare_kgs_data(subgraph_nodes, subgraph_edges):
     """
     Prepares data in the .kgs format to be compatible with 02-trim_nodes.py.
@@ -130,39 +152,12 @@ def prepare_kgs_data(subgraph_nodes, subgraph_edges):
         # Set the 'title' property for popover text
         new_node['title'] = clean_and_wrap(new_node.get("summary", ""))
 
-        # Assign distinct colors based on group/type, but only if 'color' is not already defined
-        if 'color' not in new_node:
-            group = new_node.get("group") or new_node.get("type") or "default"
-            # Temporarily store nodes by group to assign colors
-            # This part needs to be done after all nodes are processed to ensure consistent color assignment
-            # So, we'll collect nodes and then assign colors in a separate loop or function.
-            # For now, let's just mark them for color assignment.
-            new_node['_group_for_color'] = group # Use a temporary key
-
         # Apply default font styling, but only if 'font' is not already defined
         if 'font' not in new_node:
             new_node['font'] = {"color": "white", "strokeWidth": 2, "strokeColor": "black"}
-        
+
         processed_nodes.append(new_node)
-
-    # Second pass for color assignment (after all nodes are in processed_nodes)
-    # This ensures consistent color mapping across all nodes based on their groups.
-    groups_for_coloring = defaultdict(list)
-    for node in processed_nodes:
-        if '_group_for_color' in node:
-            groups_for_coloring[node['_group_for_color']].append(node)
-            del node['_group_for_color'] # Clean up temporary key
-
-    group_names = sorted(groups_for_coloring)
-    total_groups = len(group_names)
-
-    for idx, group in enumerate(group_names):
-        h = idx / max(1, total_groups)
-        s, v = 0.6, 0.85
-        r, g, b = colorsys.hsv_to_rgb(h, s, v)
-        color_hex = f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
-        for node in groups_for_coloring[group]:
-            node['color'] = {"background": color_hex}
+    assign_group_colors(processed_nodes)
 
 
     # Process Edges: Preserve all original properties, then add/override vis.js specific ones.
@@ -384,13 +379,8 @@ G.add_edges_from([(e["source"], e["target"], e) for e in valid_edges])
 # Compute community assignments once for optional coloring
 communities = community.greedy_modularity_communities(G.to_undirected())
 community_map = {n: idx for idx, comm in enumerate(communities) for n in comm}
-community_colors = {}
 total_comms = len(communities)
-for idx in range(total_comms):
-    h = idx / max(1, total_comms)
-    s, v = 0.6, 0.85
-    r, g, b = colorsys.hsv_to_rgb(h, s, v)
-    community_colors[idx] = f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+community_colors = {idx: color_from_index(idx, total_comms) for idx in range(total_comms)}
 
 vis_options = {
     "interaction": { "zoomSpeed": 0.2 },
@@ -602,6 +592,9 @@ with tab5:
         # Use metrics_df as a lookup, but iterate over G.nodes() for consistency
         metrics_lookup = metrics_df.set_index('ID')
 
+        # Pre-compute total number of communities for consistent color mapping
+        total_comms = metrics_df["Community"].nunique()
+
         # Add nodes with visual encoding
         for node_id in G.nodes():
             # Look up metrics for the node
@@ -609,18 +602,17 @@ with tab5:
                 row = metrics_lookup.loc[node_id]
                 label = row["Label"]
                 size = 15 + row["Degree"] * 50  # Scale size by degree
-                
-                # Color by community
-                community_id = row["Community"]
-                if pd.notna(community_id):
-                    hue = int((community_id * 137.5) % 360)
-                    color = f"hsl({hue}, 70%, 50%)"
-                else:
-                    color = "#808080" # Grey for no community
 
-                border_color = "black"
-                if row["Betweenness"] > bridge_threshold:
-                    border_color = "red" # Highlight bridges
+                # Determine color by community
+                community_id = row["Community"]
+                border_color = "red" if row["Betweenness"] > bridge_threshold else "black"
+
+                if pd.notna(community_id):
+                    color_hex = color_from_index(int(community_id), total_comms)
+                else:
+                    color_hex = "#808080"  # Grey for nodes with no community
+
+                node_color = {"background": color_hex, "border": border_color}
 
                 title = f"""
                 <b>{label}</b><br>
@@ -630,8 +622,15 @@ with tab5:
                 PageRank: {row['PageRank']:.3f}<br>
                 Community: {row['Community']}
                 """
-                
-                net_anatomy.add_node(node_id, label=label, title=title, size=size, color=color, borderWidth=3 if border_color == "red" else 1, borderColor=border_color)
+
+                net_anatomy.add_node(
+                    node_id,
+                    label=label,
+                    title=title,
+                    size=size,
+                    color=node_color,
+                    borderWidth=3 if border_color == "red" else 1,
+                )
             except KeyError:
                 # This node was in the graph but not in the metrics, add it with default styling
                 node_info = node_lookup.get(node_id, {})
