@@ -16,6 +16,7 @@ from UTL_kg_compressor import KGCompressor
 import pandas as pd
 from networkx.algorithms import community
 import colorsys
+import plotly.graph_objects as go
 
 from UTL_kg_utils import (
     clean_and_wrap,
@@ -83,7 +84,19 @@ def compress_kge_data(nodes, edges, embeddings, model_name):
         return None
 
 
-def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_options, source_node_id=None):
+def generate_edge_color_map(edges):
+    edge_types = sorted({e.get("type", "default") for e in edges})
+    total = len(edge_types)
+    color_map = {}
+    for idx, etype in enumerate(edge_types):
+        h = idx / max(1, total)
+        s, v = 0.6, 0.85
+        r, g, b = colorsys.hsv_to_rgb(h, s, v)
+        color_map[etype] = f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+    return color_map
+
+
+def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_options, source_node_id=None, edge_colors=None):
     """
     Generates and displays a subgraph visualization without returning data.
     """
@@ -104,7 +117,17 @@ def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_o
 
     for edge in subgraph_edges:
         edge_label = edge.get("label") or edge.get("type", "")
-        sub_net.add_edge(edge["source"], edge["target"], title=edge_label, label=edge_label)
+        e_type = edge.get("type", "")
+        e_color = edge_colors.get(e_type) if edge_colors else None
+        width = edge.get("weight", 1)
+        sub_net.add_edge(
+            edge["source"],
+            edge["target"],
+            title=edge_label,
+            label=edge_label,
+            color=e_color,
+            width=width,
+        )
         
     html_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
     try:
@@ -234,6 +257,8 @@ valid_node_ids = set(node["id"] for node in nodes)
 valid_edges = [edge for edge in edges if edge["source"] in valid_node_ids and edge["target"] in valid_node_ids]
 skipped_edges = [edge for edge in edges if edge not in valid_edges]
 
+edge_color_map = generate_edge_color_map(valid_edges)
+
 G = nx.DiGraph()
 G.add_nodes_from((node["id"], node) for node in nodes)
 G.add_edges_from([(e["source"], e["target"], e) for e in valid_edges])
@@ -268,35 +293,118 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Full Graph", "Find Similar Nodes", "Sem
 with tab1:
     st.header("Interactive Full Graph")
     color_by_community = st.checkbox("Color nodes by community")
+    layout_choice = st.selectbox("Layout Style", ["Force-directed", "Hierarchical", "Radial"])
+    renderer_choice = st.radio("Renderer", ["2D", "3D"], horizontal=True)
+
     node_types = sorted({node_kind(node) for node in nodes})
     selected_types = st.multiselect("Node types to display", node_types, default=node_types)
     filtered_nodes = [node for node in nodes if node_kind(node) in selected_types]
     filtered_node_ids = {n["id"] for n in filtered_nodes}
-    filtered_edges = [edge for edge in valid_edges if edge["source"] in filtered_node_ids and edge["target"] in filtered_node_ids]
+    filtered_edges = [
+        edge for edge in valid_edges if edge["source"] in filtered_node_ids and edge["target"] in filtered_node_ids
+    ]
 
-    net = Network(height="750px", width="100%", notebook=False, directed=True)
-    net.set_options(json.dumps(vis_options))
-    for node in filtered_nodes:
-        label = node["label"]
-        tooltip = clean_and_wrap(node.get("summary", ""))
-        if color_by_community:
-            comm_idx = community_map.get(node["id"])
-            color = community_colors.get(comm_idx, "#97c2fc")
-            net.add_node(node["id"], label=label, title=tooltip, color=color)
+    if renderer_choice == "2D":
+        net = Network(height="750px", width="100%", notebook=False, directed=True)
+        if layout_choice == "Force-directed":
+            net.set_options(json.dumps(vis_options))
+        elif layout_choice == "Hierarchical":
+            hier_options = {
+                "layout": {"hierarchical": {"enabled": True, "direction": "UD", "sortMethod": "directed"}},
+                "physics": {"enabled": False},
+            }
+            net.set_options(json.dumps(hier_options))
+        elif layout_choice == "Radial":
+            net.set_options(json.dumps({"physics": {"enabled": False}}))
+            pos = nx.circular_layout(G.subgraph(filtered_node_ids))
         else:
-            net.add_node(node["id"], label=label, title=tooltip)
-    for edge in filtered_edges:
-        edge_label = edge.get("label") or edge.get("type", "")
-        net.add_edge(edge["source"], edge["target"], title=edge_label, label=edge_label)
+            pos = None
 
-    html_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-    try:
-        net.write_html(html_file.name)
-        with open(html_file.name, 'r', encoding='utf-8') as f:
-            st.components.v1.html(f.read(), height=800, width=1600, scrolling=True)
-    finally:
-        html_file.close()
-        os.remove(html_file.name)
+        for node in filtered_nodes:
+            label = node["label"]
+            tooltip = clean_and_wrap(node.get("summary", ""))
+            kwargs = {}
+            if layout_choice == "Radial":
+                x, y = pos.get(node["id"], (0, 0))
+                kwargs.update({"x": x * 1000, "y": y * 1000, "fixed": True})
+            if color_by_community:
+                comm_idx = community_map.get(node["id"])
+                kwargs["color"] = community_colors.get(comm_idx, "#97c2fc")
+            net.add_node(node["id"], label=label, title=tooltip, **kwargs)
+
+        for edge in filtered_edges:
+            edge_label = edge.get("label") or edge.get("type", "")
+            e_type = edge.get("type", "")
+            e_color = edge_color_map.get(e_type)
+            width = edge.get("weight", 1)
+            net.add_edge(
+                edge["source"],
+                edge["target"],
+                title=edge_label,
+                label=edge_label,
+                color=e_color,
+                width=width,
+            )
+
+        html_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+        try:
+            net.write_html(html_file.name)
+            with open(html_file.name, 'r', encoding='utf-8') as f:
+                st.components.v1.html(f.read(), height=800, width=1600, scrolling=True)
+        finally:
+            html_file.close()
+            os.remove(html_file.name)
+    else:
+        subG = G.subgraph(filtered_node_ids)
+        pos3d = nx.spring_layout(subG, dim=3)
+        edge_traces = []
+        for edge in filtered_edges:
+            x0, y0, z0 = pos3d[edge["source"]]
+            x1, y1, z1 = pos3d[edge["target"]]
+            e_type = edge.get("type", "")
+            e_color = edge_color_map.get(e_type)
+            width = edge.get("weight", 1)
+            edge_traces.append(
+                go.Scatter3d(
+                    x=[x0, x1],
+                    y=[y0, y1],
+                    z=[z0, z1],
+                    mode="lines",
+                    line=dict(color=e_color, width=width),
+                    hoverinfo="none",
+                )
+            )
+
+        node_x = []
+        node_y = []
+        node_z = []
+        node_text = []
+        node_colors = []
+        for node in filtered_nodes:
+            x, y, z = pos3d[node["id"]]
+            node_x.append(x)
+            node_y.append(y)
+            node_z.append(z)
+            node_text.append(node["label"])
+            if color_by_community:
+                comm_idx = community_map.get(node["id"])
+                node_colors.append(community_colors.get(comm_idx, "#97c2fc"))
+            else:
+                node_colors.append("#97c2fc")
+
+        node_trace = go.Scatter3d(
+            x=node_x,
+            y=node_y,
+            z=node_z,
+            mode="markers",
+            marker=dict(size=6, color=node_colors),
+            text=node_text,
+            hoverinfo="text",
+        )
+
+        fig = go.Figure(data=edge_traces + [node_trace])
+        fig.update_layout(showlegend=False, margin=dict(l=0, r=0, b=0, t=0))
+        st.plotly_chart(fig, use_container_width=True)
 
 with tab2:
     st.header("Find Similar Nodes")
@@ -315,7 +423,15 @@ with tab2:
             result_node_ids.append(node_ids[i])
 
         # Display the subgraph
-        display_subgraph(G, result_node_ids, node_lookup, valid_edges, vis_options, source_node_id=selected_sim_node)
+        display_subgraph(
+            G,
+            result_node_ids,
+            node_lookup,
+            valid_edges,
+            vis_options,
+            source_node_id=selected_sim_node,
+            edge_colors=edge_color_map,
+        )
 
         # Get the same subgraph data for exporting
         subgraph_nodes, subgraph_edges = get_subgraph(G, result_node_ids, node_lookup, valid_edges)
@@ -351,7 +467,14 @@ with tab3:
             st.write(f"- {node_ids[i]} (Similarity: {sims[i]:.2f})")
 
         # Display the subgraph
-        display_subgraph(G, result_node_ids, node_lookup, valid_edges, vis_options)
+        display_subgraph(
+            G,
+            result_node_ids,
+            node_lookup,
+            valid_edges,
+            vis_options,
+            edge_colors=edge_color_map,
+        )
 
         # Get the same subgraph data for exporting
         subgraph_nodes, subgraph_edges = get_subgraph(G, result_node_ids, node_lookup, valid_edges)
@@ -459,7 +582,17 @@ with tab5:
             # Ensure both source and target nodes exist before adding an edge
             if edge["source"] in G.nodes() and edge["target"] in G.nodes():
                 edge_label = edge.get("label") or edge.get("type", "")
-                net_anatomy.add_edge(edge["source"], edge["target"], title=edge_label, label=edge_label)    
+                e_type = edge.get("type", "")
+                e_color = edge_color_map.get(e_type)
+                width = edge.get("weight", 1)
+                net_anatomy.add_edge(
+                    edge["source"],
+                    edge["target"],
+                    title=edge_label,
+                    label=edge_label,
+                    color=e_color,
+                    width=width,
+                )
 
         # Save and display the graph
         html_file_anatomy = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
