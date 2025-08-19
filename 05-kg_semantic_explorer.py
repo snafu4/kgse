@@ -17,7 +17,7 @@ import pandas as pd
 from networkx.algorithms import community
 import colorsys
 
-from kg_utils import (
+from UTL_kg_utils import (
     clean_and_wrap,
     node_kind,
     prepare_kgs_data,
