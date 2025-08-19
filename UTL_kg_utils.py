@@ -1,27 +1,28 @@
+import colorsys
+import json
 import re
 import textwrap
-import json
-import zlib
 import uuid
-import colorsys
+import zlib
 from collections import defaultdict
 
-import pandas as pd
 import networkx as nx
+import pandas as pd
 from networkx.algorithms import community
 
 
 def clean_and_wrap(text, width=50):
     """Remove HTML tags and wrap text to the specified width."""
-    no_html = re.sub(r'<.*?>', '', text)
-    normalized = re.sub(r'\s+', ' ', no_html).strip()
+    no_html = re.sub(r"<.*?>", "", text)
+    normalized = re.sub(r"\s+", " ", no_html).strip()
     return textwrap.fill(
         normalized, width=width, break_long_words=False, break_on_hyphens=False
     )
 
 
 def node_kind(n: dict):
-    """Unified accessor for a node's category.
+    """
+    Unified accessor for a node's category.
 
     Prefer explicit 'type', then fall back to 'group', else 'default'.
     """
@@ -142,6 +143,7 @@ def calculate_graph_metrics(graph, node_lookup, warn=None):
         Mapping of node IDs to node information.
     warn : callable, optional
         Function used to emit warning messages.
+
     """
     if warn is None:
         warn = lambda *args, **kwargs: None  # noqa: E731
@@ -154,7 +156,7 @@ def calculate_graph_metrics(graph, node_lookup, warn=None):
     try:
         eigenvector_centrality = nx.eigenvector_centrality(graph, max_iter=1000, tol=1.0e-6)
     except nx.PowerIterationFailedConvergence:
-        eigenvector_centrality = {n: 0.0 for n in graph.nodes()}
+        eigenvector_centrality = dict.fromkeys(graph.nodes(), 0.0)
         warn("Eigenvector centrality did not converge.")
 
     pagerank = nx.pagerank(graph)
