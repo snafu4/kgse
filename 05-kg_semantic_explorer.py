@@ -13,24 +13,17 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import os
 from UTL_kg_compressor import KGCompressor
-import re
-import textwrap
 import pandas as pd
 from networkx.algorithms import community
-import zlib
-import uuid
 import colorsys
-from collections import defaultdict
 
-def clean_and_wrap(text, width=50):
-    # Remove all HTML tags (anything between < and >)
-    no_html = re.sub(r'<.*?>', '', text)
-    # Replace multiple whitespace (including newlines) with a single space
-    normalized = re.sub(r'\s+', ' ', no_html).strip()
-    # Wrap text to the desired width, breaking only at word boundaries
-    wrapped = textwrap.fill(normalized, width=width, break_long_words=False, break_on_hyphens=False)
-    # Ensure explicit "\n" (textwrap.fill already uses \n at end of lines)
-    return wrapped
+from kg_utils import (
+    clean_and_wrap,
+    node_kind,
+    prepare_kgs_data,
+    get_subgraph,
+    calculate_graph_metrics,
+)
 
 
 # st.markdown("""
@@ -89,142 +82,6 @@ def compress_kge_data(nodes, edges, embeddings, model_name):
         st.error(f"Failed to compress data for saving: {e}")
         return None
 
-
-def node_kind(n: dict):
-    """Unified accessor for a node's category.
-    Prefer explicit 'type', then fall back to 'group', else 'default'.
-    """
-    return n.get('type') or n.get('group') or 'default'
-
-def prepare_kgs_data(subgraph_nodes, subgraph_edges):
-    """
-    Prepares data in the .kgs format to be compatible with 02-trim_nodes.py.
-    This format is a zlib-compressed JSON object representing an "IsolationState".
-    It now aims to preserve all original node/edge properties from the subgraph,
-    while adding/overwriting only necessary vis.js-specific fields.
-    """
-    
-    # Calculate node degrees for the 'value' property.
-    node_degrees = defaultdict(int)
-    for edge in subgraph_edges:
-        node_degrees[edge.get("source")] += 1
-        node_degrees[edge.get("target")] += 1
-
-    # Process Nodes: Preserve all original properties, then add/override vis.js specific ones.
-    processed_nodes = []
-    for node in subgraph_nodes:
-        new_node = dict(node) # Start with a shallow copy of the original node
-
-        # Add 'value' property for sizing (always calculated)
-        new_node['value'] = node_degrees[new_node.get("id")]
-
-        # Explicitly set shape to 'dot' as requested
-        new_node['shape'] = 'dot'
-
-        # Ensure 'summary' and 'type' are present (add defaults only if truly missing)
-        if 'summary' not in new_node:
-            new_node['summary'] = ''
-        if 'type' not in new_node:
-            new_node['type'] = new_node.get('group', 'default')
-
-        # Set the 'title' property for popover text
-        new_node['title'] = clean_and_wrap(new_node.get("summary", ""))
-
-        # Assign distinct colors based on group/type, but only if 'color' is not already defined
-        if 'color' not in new_node:
-            group = new_node.get("group") or new_node.get("type") or "default"
-            # Temporarily store nodes by group to assign colors
-            # This part needs to be done after all nodes are processed to ensure consistent color assignment
-            # So, we'll collect nodes and then assign colors in a separate loop or function.
-            # For now, let's just mark them for color assignment.
-            new_node['_group_for_color'] = group # Use a temporary key
-
-        # Apply default font styling, but only if 'font' is not already defined
-        if 'font' not in new_node:
-            new_node['font'] = {"color": "white", "strokeWidth": 2, "strokeColor": "black"}
-        
-        processed_nodes.append(new_node)
-
-    # Second pass for color assignment (after all nodes are in processed_nodes)
-    # This ensures consistent color mapping across all nodes based on their groups.
-    groups_for_coloring = defaultdict(list)
-    for node in processed_nodes:
-        if '_group_for_color' in node:
-            groups_for_coloring[node['_group_for_color']].append(node)
-            del node['_group_for_color'] # Clean up temporary key
-
-    group_names = sorted(groups_for_coloring)
-    total_groups = len(group_names)
-
-    for idx, group in enumerate(group_names):
-        h = idx / max(1, total_groups)
-        s, v = 0.6, 0.85
-        r, g, b = colorsys.hsv_to_rgb(h, s, v)
-        color_hex = f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
-        for node in groups_for_coloring[group]:
-            node['color'] = {"background": color_hex}
-
-
-    # Process Edges: Preserve all original properties, then add/override vis.js specific ones.
-    processed_edges = []
-    for edge in subgraph_edges:
-        new_edge = dict(edge) # Start with a shallow copy of the original edge
-
-        # Transform 'source'/'target' to 'from'/'to' (vis.js format)
-        new_edge['from'] = new_edge.pop('source')
-        new_edge['to'] = new_edge.pop('target')
-
-        # Ensure 'id' is present
-        if 'id' not in new_edge:
-            new_edge['id'] = str(uuid.uuid4())
-
-        # Ensure 'label' is present (use 'type' if 'label' is missing)
-        if 'label' not in new_edge:
-            new_edge['label'] = new_edge.get('type', '')
-
-        # Ensure 'arrows' is present
-        if 'arrows' not in new_edge:
-            new_edge['arrows'] = 'to' # Default direction
-
-        # Apply default font styling, but only if 'font' is not already defined
-        if 'font' not in new_edge:
-            new_edge['font'] = {"color": "white", "strokeWidth": 2, "strokeColor": "black"}
-        
-        # Ensure 'color' is present (if not, vis.js will use default)
-        # No explicit default color assignment here, vis.js handles it.
-
-        processed_edges.append(new_edge)
-
-    # Build the final state object matching the structure from 02-trim_nodes.py.
-    state = {
-        "type": "IsolationState",
-        "version": 1,
-        "timestamp": pd.Timestamp.now().isoformat(),
-        "isolateStack": [{
-            "nodes": processed_nodes,
-            "edges": processed_edges,
-            "deleted": []
-        }]
-    }
-
-    json_string = json.dumps(state, indent=2)
-    compressed_data = zlib.compress(json_string.encode('utf-8'))
-    return compressed_data
-
-def get_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges):
-    """
-    Calculates the subgraph containing the result nodes and their immediate neighbors.
-    """
-    neighbors = set(n for node_id in result_node_ids if node_id in graph_obj for n in list(graph_obj.predecessors(node_id)) + list(graph_obj.successors(node_id)))
-    subgraph_node_ids = set(result_node_ids) | neighbors
-
-    # Return the full node object from the lookup
-    subgraph_nodes = [node_lookup[nid] for nid in subgraph_node_ids if nid in node_lookup]
-    
-    # Return the full edge object
-    subgraph_edges = [edge for edge in valid_edges if edge.get('source') in subgraph_node_ids and edge.get('target') in subgraph_node_ids]
-    
-    return subgraph_nodes, subgraph_edges
 
 def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_options, source_node_id=None):
     """
@@ -539,52 +396,10 @@ with tab5:
     st.header("Graph Anatomy")
 
     @st.cache_data
-    def calculate_graph_metrics(_G):
-        if not _G.nodes():
-            return None
+    def cached_graph_metrics(_G):
+        return calculate_graph_metrics(_G, node_lookup, warn=st.warning)
 
-        # Centrality Measures
-        degree_centrality = nx.degree_centrality(_G)
-        betweenness_centrality = nx.betweenness_centrality(_G)
-        try:
-            eigenvector_centrality = nx.eigenvector_centrality(_G, max_iter=1000, tol=1.0e-6)
-        except nx.PowerIterationFailedConvergence:
-            eigenvector_centrality = {n: 0.0 for n in _G.nodes()}
-            st.warning("Eigenvector centrality did not converge.")
-        
-        pagerank = nx.pagerank(_G)
-
-        # Community Detection
-        try:
-            communities_generator = community.greedy_modularity_communities(_G.to_undirected())
-            communities = [list(c) for c in communities_generator]
-            node_community = {node_id: i for i, com in enumerate(communities) for node_id in com}
-        except Exception as e:
-            communities = []
-            node_community = {}
-            st.warning(f"Could not perform community detection: {e}")
-
-        # Combine into a DataFrame, ensuring proper alignment
-        metrics_df = pd.DataFrame({
-            "Degree": degree_centrality,
-            "Betweenness": betweenness_centrality,
-            "Eigenvector": eigenvector_centrality,
-            "PageRank": pagerank
-        })
-        metrics_df['Community'] = pd.Series(node_community)
-        # Map the node IDs (index) to their labels
-        metrics_df['Label'] = [node_lookup[nid].get('label', nid) for nid in metrics_df.index]
-        
-        # Reorder columns for display and add ID
-        metrics_df = metrics_df.reset_index().rename(columns={'index': 'ID'})
-        
-        # Ensure desired column order
-        column_order = ['ID', 'Label', 'Degree', 'Betweenness', 'Eigenvector', 'PageRank', 'Community']
-        metrics_df = metrics_df[[col for col in column_order if col in metrics_df.columns]]
-
-        return metrics_df
-
-    metrics_df = calculate_graph_metrics(G)
+    metrics_df = cached_graph_metrics(G)
 
     if metrics_df is not None:
         st.subheader("Graph Metrics Data")
