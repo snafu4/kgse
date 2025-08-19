@@ -425,13 +425,12 @@ with tab5:
                 label = row["Label"]
                 size = 15 + row["Degree"] * 50  # Scale size by degree
                 
-                # Color by community
+                # Color by community using precomputed palette
                 community_id = row["Community"]
                 if pd.notna(community_id):
-                    hue = int((community_id * 137.5) % 360)
-                    color = f"hsl({hue}, 70%, 50%)"
+                    color = community_colors.get(int(community_id), "#808080")
                 else:
-                    color = "#808080" # Grey for no community
+                    color = "#808080"  # Grey for no community
 
                 border_color = "black"
                 if row["Betweenness"] > bridge_threshold:
