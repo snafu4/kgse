@@ -6,7 +6,7 @@ This project is a Python-based web application called "Knowledge Graph Semantic 
 - **Semantic Search:** `sentence-transformers` and `scikit-learn` provide the foundation for semantic search capabilities, enabling users to find nodes based on meaning rather than just keywords.
 - **3D Visualization:** `plotly` is used to create interactive 3D representations of the graphs.
 
-The application loads graph data from custom compressed file formats (`.kgc` and `.kge`) and provides a rich, interactive experience for exploring the relationships and properties of the graph's nodes and edges.
+The application loads graph data from custom compressed file formats (`.kgc` and `.kge` from an application created by the same developer) and provides a rich, interactive experience for exploring the relationships and properties of the graph's nodes and edges.
 
 ## Features
 
@@ -24,6 +24,7 @@ The application is organized into several tabs, each providing a different set o
 - **`UTL_kg_utils.py`**: A utility module that provides a wide range of helper functions for graph manipulation, including functions for calculating graph metrics, preparing data for visualization, and cleaning text.
 - **`UTL_kg_compressor.py`**: A simple utility for compressing and decompressing graph data into the custom `.kgc` and `.kge` file formats.
 - **`requirements.txt`**: The list of Python dependencies required to run the project.
+- **`demo.html`**: A standalone webpage that displays an interactive knowledge graph. When you open it, it shows a large, explorable network of ideas or entities connected by relationships. You can zoom, pan, and click around to see how everything links together. All the data for the graph is already built into the file, so it works on its own with no setup. It’s basically a packaged, portable viewer for exploring a structured map of information.
 
 # Data Formats
 
