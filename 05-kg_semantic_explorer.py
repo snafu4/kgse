@@ -156,8 +156,74 @@ uploaded_file_widget = st.sidebar.file_uploader(
     help="Load a `.kgc` (graph only) or `.kge` (graph + embeddings) file."
 )
 
+import shutil
+
+# ... (imports remain the same, ensure shutil is added if not present in surrounding context)
+
+# ---- Helper Functions ----
+def setup_static_files():
+    """
+    Copies demo.html and lib/ to a 'static' directory so Streamlit 
+    serves them directly, bypassing the app router.
+    """
+    static_dir = "static"
+    if not os.path.exists(static_dir):
+        os.makedirs(static_dir)
+    
+    # Copy demo.html
+    if os.path.exists("demo.html"):
+        # Only copy if source is newer or dest doesn't exist
+        src_stat = os.stat("demo.html")
+        dst = os.path.join(static_dir, "demo.html")
+        if not os.path.exists(dst) or os.stat(dst).st_mtime < src_stat.st_mtime:
+            shutil.copy2("demo.html", dst)
+            
+    # Copy lib folder
+    if os.path.exists("lib"):
+        dst_lib = os.path.join(static_dir, "lib")
+        # Simple check: if lib exists in static, assume it's fine for now to avoid slow recursive checks
+        # For development, one might want to be more aggressive with updates
+        if not os.path.exists(dst_lib):
+             shutil.copytree("lib", dst_lib)
+
+# Run setup
+setup_static_files()
+
+# ... (rest of file)
+
+st.sidebar.title("File Operations")
+# ... (file uploader) ...
+
 if st.sidebar.button("Load Demo Graph"):
     st.session_state.use_demo = True
+
+if os.path.exists("demo.html"):
+    col1, col2 = st.sidebar.columns([1, 1])
+    
+    # Option 1: Local Open (Preferred for local use)
+    def open_local_demo():
+        import webbrowser
+        from pathlib import Path
+        try:
+            # Resolve absolute path and convert to file URI
+            file_uri = Path("demo.html").resolve().as_uri()
+            print(f"Attempting to open: {file_uri}") # Debug log
+            webbrowser.open_new_tab(file_uri)
+        except Exception as e:
+            st.sidebar.error(f"Could not open local file: {e}")
+
+    with col1:
+        st.sidebar.button("Open Local", on_click=open_local_demo, help="Opens the file directly from your disk (Local only).")
+
+    # Option 2: Server/Static Open (Fallback/Cloud)
+    with col2:
+        st.sidebar.markdown(
+            "<a href='app/static/demo.html' target='_blank' style='text-decoration:none;'><button style='width:100%; padding:0.5rem; border:1px solid #ccc; border-radius:4px; background:white; color:black; cursor:pointer;'>Open Web</button></a>",
+            unsafe_allow_html=True
+        )
+
+uploaded_file = None
+# ...
 
 uploaded_file = None
 if uploaded_file_widget is not None:
