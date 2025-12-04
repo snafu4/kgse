@@ -288,12 +288,23 @@ G.add_edges_from([(e["source"], e["target"], e) for e in valid_edges])
 communities = community.greedy_modularity_communities(G.to_undirected())
 community_map = {n: idx for idx, comm in enumerate(communities) for n in comm}
 community_colors = {}
+community_names = {}
+
 total_comms = len(communities)
-for idx in range(total_comms):
+for idx, comm in enumerate(communities):
+    # Color generation
     h = idx / max(1, total_comms)
     s, v = 0.6, 0.85
     r, g, b = colorsys.hsv_to_rgb(h, s, v)
     community_colors[idx] = f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+    
+    # Name generation: Find node with highest degree in this community
+    if comm:
+        central_node_id = max(comm, key=lambda n: G.degree[n])
+        central_label = node_lookup[central_node_id].get("label", central_node_id)
+        community_names[idx] = f"{central_label} Cluster"
+    else:
+        community_names[idx] = f"Community {idx}"
 
 vis_options = {
     "interaction": { "zoomSpeed": 0.2 },
@@ -351,6 +362,9 @@ with tab1:
             if color_by_community:
                 comm_idx = community_map.get(node["id"])
                 kwargs["color"] = community_colors.get(comm_idx, "#97c2fc")
+                comm_name = community_names.get(comm_idx, "Unknown")
+                tooltip = f"Community: {comm_name}\n\n{tooltip}"
+                
             net.add_node(node["id"], label=label, title=tooltip, **kwargs)
 
         for edge in filtered_edges:
@@ -572,9 +586,12 @@ with tab5:
                 # Color by community using precomputed palette
                 community_id = row["Community"]
                 if pd.notna(community_id):
-                    color = community_colors.get(int(community_id), "#808080")
+                    comm_idx = int(community_id)
+                    color = community_colors.get(comm_idx, "#808080")
+                    comm_name = community_names.get(comm_idx, str(comm_idx))
                 else:
                     color = "#808080"  # Grey for no community
+                    comm_name = "None"
 
                 border_color = "black"
                 if row["Betweenness"] > bridge_threshold:
@@ -586,7 +603,7 @@ with tab5:
                 Betweenness: {row['Betweenness']:.3f}<br>
                 Eigenvector: {row['Eigenvector']:.3f}<br>
                 PageRank: {row['PageRank']:.3f}<br>
-                Community: {row['Community']}
+                Community: {comm_name}
                 """
                 
                 net_anatomy.add_node(node_id, label=label, title=title, size=size, color=color, borderWidth=3 if border_color == "red" else 1, borderColor=border_color)
