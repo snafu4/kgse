@@ -304,9 +304,8 @@ for idx, comm in enumerate(communities):
         central_node_id = max(comm, key=lambda n: G.degree[n])
         central_label = node_lookup[central_node_id].get("label", central_node_id)
         # Remove square brackets and all text between them
-        central_label = re.sub(r"[.*?]", "", central_label)
-        # Ensure only one space before "Cluster" by stripping leading/trailing whitespace
-        community_names[idx] = f"{central_label.strip()} Cluster"
+        central_label = re.sub(r"\[.*?\]", "", central_label)
+        community_names[idx] = central_label.strip()
     else:
         community_names[idx] = f"Community {idx}"
 
