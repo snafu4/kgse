@@ -565,7 +565,12 @@ with tab5:
 
     if metrics_df is not None:
         st.subheader("Graph Metrics Data")
-        st.dataframe(metrics_df.sort_values(by="Degree", ascending=False))
+        
+        # Create a display dataframe with named communities
+        display_df = metrics_df.copy()
+        display_df["Community"] = display_df["Community"].map(lambda x: community_names.get(int(x), str(x)) if pd.notna(x) else "None")
+        
+        st.dataframe(display_df.sort_values(by="Degree", ascending=False))
 
         st.subheader("Graph Anatomy Map")
         
