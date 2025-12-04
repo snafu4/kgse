@@ -140,15 +140,36 @@ def display_subgraph(graph_obj, result_node_ids, node_lookup, valid_edges, vis_o
 
 
 # ---- Sidebar Setup & File Upload ----
+class LocalFile:
+    def __init__(self, path):
+        self.name = os.path.basename(path)
+        self.path = path
+    def read(self):
+        with open(self.path, 'rb') as f:
+            return f.read()
+
 st.sidebar.title("File Operations")
-uploaded_file = st.sidebar.file_uploader(
+uploaded_file_widget = st.sidebar.file_uploader(
     "Load Graph",
     type=["kgc", "kge"],
     help="Load a `.kgc` (graph only) or `.kge` (graph + embeddings) file."
 )
 
+if st.sidebar.button("Load Demo Graph"):
+    st.session_state.use_demo = True
+
+uploaded_file = None
+if uploaded_file_widget is not None:
+    uploaded_file = uploaded_file_widget
+    st.session_state.use_demo = False
+elif st.session_state.get("use_demo", False):
+    if os.path.exists("demo.kge"):
+        uploaded_file = LocalFile("demo.kge")
+    else:
+        st.sidebar.error("Demo file 'demo.kge' not found.")
+
 if uploaded_file is None:
-    st.info("Please upload a .kgc or .kge file to begin.")
+    st.info("Please upload a .kgc or .kge file to begin, or click 'Load Demo Graph'.")
     st.stop()
 
 # ---- File Processing and State Initialization ----
@@ -292,7 +313,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Full Graph", "Find Similar Nodes", "Sem
 
 with tab1:
     st.header("Interactive Full Graph")
-    color_by_community = st.checkbox("Color nodes by community")
+    color_by_community = st.checkbox("Colour nodes by community", value=True)
     layout_choice = st.selectbox("Layout Style", ["Force-directed", "Hierarchical", "Radial"])
     renderer_choice = st.radio("Renderer", ["2D", "3D"], horizontal=True)
 
