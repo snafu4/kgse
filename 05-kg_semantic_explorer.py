@@ -5,6 +5,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 import json
+import re
 import tempfile
 from pyvis.network import Network
 import networkx as nx
@@ -302,7 +303,10 @@ for idx, comm in enumerate(communities):
     if comm:
         central_node_id = max(comm, key=lambda n: G.degree[n])
         central_label = node_lookup[central_node_id].get("label", central_node_id)
-        community_names[idx] = f"{central_label} Cluster"
+        # Remove square brackets and all text between them
+        central_label = re.sub(r"\[.*?\]", "", central_label)
+        # Ensure only one space before "Cluster" by stripping leading/trailing whitespace
+        community_names[idx] = f"{central_label.strip()} Cluster"
     else:
         community_names[idx] = f"Community {idx}"
 
