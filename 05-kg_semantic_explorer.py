@@ -163,28 +163,37 @@ import shutil
 # ---- Helper Functions ----
 def setup_static_files():
     """
-    Copies demo.html and lib/ to a 'static' directory so Streamlit 
-    serves them directly, bypassing the app router.
+    Creates a standalone demo.html in the 'static' directory by inlining
+    local dependencies (utils.js). This ensures it works on Streamlit Cloud
+    where relative paths to 'lib/' often break.
     """
     static_dir = "static"
     if not os.path.exists(static_dir):
         os.makedirs(static_dir)
     
-    # Copy demo.html
     if os.path.exists("demo.html"):
-        # Only copy if source is newer or dest doesn't exist
-        src_stat = os.stat("demo.html")
-        dst = os.path.join(static_dir, "demo.html")
-        if not os.path.exists(dst) or os.stat(dst).st_mtime < src_stat.st_mtime:
-            shutil.copy2("demo.html", dst)
+        try:
+            with open("demo.html", "r", encoding="utf-8") as f:
+                html_content = f.read()
             
-    # Copy lib folder
-    if os.path.exists("lib"):
-        dst_lib = os.path.join(static_dir, "lib")
-        # Simple check: if lib exists in static, assume it's fine for now to avoid slow recursive checks
-        # For development, one might want to be more aggressive with updates
-        if not os.path.exists(dst_lib):
-             shutil.copytree("lib", dst_lib)
+            # Inline utils.js if it exists
+            utils_path = os.path.join("lib", "bindings", "utils.js")
+            if os.path.exists(utils_path):
+                with open(utils_path, "r", encoding="utf-8") as f:
+                    utils_js = f.read()
+                # Replace the script tag with the actual content
+                html_content = html_content.replace(
+                    '<script src="lib/bindings/utils.js"></script>',
+                    f'<script>\n{utils_js}\n</script>'
+                )
+            
+            # Write the standalone file to static directory
+            dst = os.path.join(static_dir, "demo.html")
+            with open(dst, "w", encoding="utf-8") as f:
+                f.write(html_content)
+                
+        except Exception as e:
+            print(f"Error setting up static files: {e}")
 
 # Run setup
 setup_static_files()
