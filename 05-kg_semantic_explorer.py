@@ -156,83 +156,8 @@ uploaded_file_widget = st.sidebar.file_uploader(
     help="Load a `.kgc` (graph only) or `.kge` (graph + embeddings) file."
 )
 
-import shutil
-
-# ... (imports remain the same, ensure shutil is added if not present in surrounding context)
-
-# ---- Helper Functions ----
-def setup_static_files():
-    """
-    Creates a standalone demo.html in the 'static' directory by inlining
-    local dependencies (utils.js). This ensures it works on Streamlit Cloud
-    where relative paths to 'lib/' often break.
-    """
-    static_dir = "static"
-    if not os.path.exists(static_dir):
-        os.makedirs(static_dir)
-    
-    if os.path.exists("demo.html"):
-        try:
-            with open("demo.html", "r", encoding="utf-8") as f:
-                html_content = f.read()
-            
-            # Inline utils.js if it exists
-            utils_path = os.path.join("lib", "bindings", "utils.js")
-            if os.path.exists(utils_path):
-                with open(utils_path, "r", encoding="utf-8") as f:
-                    utils_js = f.read()
-                # Replace the script tag with the actual content
-                html_content = html_content.replace(
-                    '<script src="lib/bindings/utils.js"></script>',
-                    f'<script>\n{utils_js}\n</script>'
-                )
-            
-            # Write the standalone file to static directory
-            dst = os.path.join(static_dir, "demo.html")
-            with open(dst, "w", encoding="utf-8") as f:
-                f.write(html_content)
-                
-        except Exception as e:
-            print(f"Error setting up static files: {e}")
-
-# Run setup
-setup_static_files()
-
-# ... (rest of file)
-
-st.sidebar.title("File Operations")
-# ... (file uploader) ...
-
 if st.sidebar.button("Load Demo Graph"):
     st.session_state.use_demo = True
-
-if os.path.exists("demo.html"):
-    col1, col2 = st.sidebar.columns([1, 1])
-    
-    # Option 1: Local Open (Preferred for local use)
-    def open_local_demo():
-        import webbrowser
-        from pathlib import Path
-        try:
-            # Resolve absolute path and convert to file URI
-            file_uri = Path("demo.html").resolve().as_uri()
-            print(f"Attempting to open: {file_uri}") # Debug log
-            webbrowser.open_new_tab(file_uri)
-        except Exception as e:
-            st.sidebar.error(f"Could not open local file: {e}")
-
-    with col1:
-        st.sidebar.button("Open Local", on_click=open_local_demo, help="Opens the file directly from your disk (Local only).")
-
-    # Option 2: Server/Static Open (Fallback/Cloud)
-    with col2:
-        st.sidebar.markdown(
-            "<a href='app/static/demo.html' target='_blank' style='text-decoration:none;'><button style='width:100%; padding:0.5rem; border:1px solid #ccc; border-radius:4px; background:white; color:black; cursor:pointer;'>Open Web</button></a>",
-            unsafe_allow_html=True
-        )
-
-uploaded_file = None
-# ...
 
 uploaded_file = None
 if uploaded_file_widget is not None:
@@ -379,7 +304,7 @@ for idx, comm in enumerate(communities):
         central_node_id = max(comm, key=lambda n: G.degree[n])
         central_label = node_lookup[central_node_id].get("label", central_node_id)
         # Remove square brackets and all text between them
-        central_label = re.sub(r"\[.*?\]", "", central_label)
+        central_label = re.sub(r"[.*?]", "", central_label)
         # Ensure only one space before "Cluster" by stripping leading/trailing whitespace
         community_names[idx] = f"{central_label.strip()} Cluster"
     else:
